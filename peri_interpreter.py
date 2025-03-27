@@ -1,12 +1,6 @@
-#Building my First Programming Language
-
-
-#Writing the Lexical Analysis Phase
-# peri_interpreter.py
-
 import re
 
-# Token types
+# ====================== LEXER ======================
 TOKENS = [
     ('NUMBER', r'\d+'),
     ('IDENTIFIER', r'[a-zA-Z_]\w*'),
@@ -20,49 +14,45 @@ TOKENS = [
     ('LBRACE', r'\{'),
     ('RBRACE', r'\}'),
     ('IF', r'if'),
+    ('ELSE', r'else'),
     ('WHILE', r'while'),
     ('PRINT', r'print'),
     ('STRING', r'"[^"]*"'),
-    ('SEMICOLON', r';'),  # Add semicolon support
-    ('SKIP', r'[ \t\n]'),  # Skip whitespace
-    ('MISMATCH', r'.'),    # Any other character
+    ('SEMICOLON', r';'),
+    ('SKIP', r'[ \t\n]'),  # Whitespace
+    ('MISMATCH', r'.'),    # Unrecognized characters
 ]
 
-# Lexer
 def lex(code):
     tokens = []
-    while code:
+    pos = 0
+    while pos < len(code):
         for token_type, pattern in TOKENS:
             regex = re.compile(pattern)
-            match = regex.match(code)
+            match = regex.match(code, pos)
             if match:
                 value = match.group(0)
                 if token_type != 'SKIP':
                     tokens.append((token_type, value))
-                code = code[match.end():]
+                pos = match.end()
                 break
         else:
-            # Print the problematic character and remaining code
-            print(f"Remaining code: {code}")
-            print(f"Unexpected character: {code[0]}")
-            raise SyntaxError(f"Unexpected character: {code[0]}")
+            raise SyntaxError(f"Unexpected character: '{code[pos]}' at position {pos}")
     return tokens
 
-#Write the Parser : The parser converts tokens into an Abstract Syntax Tree (AST).
-# peri_interpreter.py
-
+# ====================== PARSER ======================
 class ASTNode:
     pass
+
+class Number(ASTNode):
+    def __init__(self, value):
+        self.value = value
 
 class BinOp(ASTNode):
     def __init__(self, left, op, right):
         self.left = left
         self.op = op
         self.right = right
-
-class Number(ASTNode):
-    def __init__(self, value):
-        self.value = value
 
 class Assign(ASTNode):
     def __init__(self, name, value):
@@ -74,18 +64,10 @@ class Print(ASTNode):
         self.value = value
 
 def parse(tokens):
-    if tokens[0][0] == 'NUMBER':
-        return Number(int(tokens.pop(0)[1]))
-    elif tokens[0][0] == 'IDENTIFIER':
-        return tokens.pop(0)[1]
-    elif tokens[0][0] == 'STRING':
-        return tokens.pop(0)[1][1:-1]  # Remove quotes from string
-    else:
-        raise SyntaxError("Invalid expression")
-
     ast = []
     while tokens:
         token_type, value = tokens[0]
+        
         if token_type == 'PRINT':
             tokens.pop(0)
             ast.append(Print(parse_expression(tokens)))
@@ -94,64 +76,83 @@ def parse(tokens):
             tokens.pop(0)  # Remove '='
             ast.append(Assign(name, parse_expression(tokens)))
         else:
-            raise SyntaxError(f"Unexpected token: {value}")
+            raise SyntaxError(f"Unexpected token: '{value}'")
+
     return ast
 
+def parse_expression(tokens):
+    if not tokens:
+        raise SyntaxError("Unexpected end of input")
 
-# Writing a Interpreter 
-# peri_interpreter.py
+    token_type, value = tokens[0]
+    
+    if token_type == 'NUMBER':
+        tokens.pop(0)
+        return Number(int(value))
+    elif token_type == 'IDENTIFIER':
+        tokens.pop(0)
+        return value
+    elif token_type == 'STRING':
+        tokens.pop(0)
+        return value[1:-1]  # Remove quotes
+    else:
+        raise SyntaxError(f"Invalid expression: '{value}'")
 
+# ====================== INTERPRETER ======================
 class Interpreter:
     def __init__(self):
         self.variables = {}
 
-def visit(self, node):
-    if isinstance(node, Number):
-        return node.value
-    elif isinstance(node, BinOp):
-        left = self.visit(node.left)
-        right = self.visit(node.right)
-        if node.op == '+':
-            return left + right
-        elif node.op == '-':
-            return left - right
-        elif node.op == '*':
-            return left * right
-        elif node.op == '/':
-            return left / right
-    elif isinstance(node, Assign):
-        self.variables[node.name] = self.visit(node.value)
-    elif isinstance(node, Print):
-        value = self.visit(node.value)
-        print(value)
-    elif isinstance(node, str):  # Handle string literals
-        return node
-    else:
-        raise RuntimeError(f"Unknown node type: {type(node)}")
+    def visit(self, node):
+        if isinstance(node, Number):
+            return node.value
+        elif isinstance(node, BinOp):
+            left = self.visit(node.left)
+            right = self.visit(node.right)
+            if node.op == '+':
+                return left + right
+            elif node.op == '-':
+                return left - right
+            elif node.op == '*':
+                return left * right
+            elif node.op == '/':
+                return left / right
+        elif isinstance(node, Assign):
+            self.variables[node.name] = self.visit(node.value)
+        elif isinstance(node, Print):
+            value = self.visit(node.value)
+            print(value)
+        elif isinstance(node, str):
+            return self.variables.get(node, f"<undefined variable '{node}'>")
+        else:
+            raise RuntimeError(f"Unknown node type: {type(node)}")
 
     def interpret(self, ast):
         for node in ast:
             self.visit(node)
 
-# peri_interpreter.py
-
+# ====================== MAIN ======================
 def main():
     import sys
     if len(sys.argv) != 2:
         print("Usage: python peri_interpreter.py <file.peri>")
         return
 
-    with open(sys.argv[1], 'r') as file:
-        code = file.read()
+    try:
+        with open(sys.argv[1], 'r') as file:
+            code = file.read()
 
-    
-    tokens = lex(code)
-    ast = parse(tokens)
-    interpreter = Interpreter()
-    interpreter.interpret(ast)
-    
+        tokens = lex(code)
+        ast = parse(tokens)
+        interpreter = Interpreter()
+        interpreter.interpret(ast)
+
+    except FileNotFoundError:
+        print(f"Error: File '{sys.argv[1]}' not found.")
+    except SyntaxError as e:
+        print(f"Syntax Error: {e}")
+    except RuntimeError as e:
+        print(f"Runtime Error: {e}")
 
 if __name__ == '__main__':
     main()
-
-
