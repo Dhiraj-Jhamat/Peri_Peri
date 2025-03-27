@@ -69,15 +69,23 @@ def parse(tokens):
         token_type, value = tokens[0]
         
         if token_type == 'PRINT':
-            tokens.pop(0)
-            ast.append(Print(parse_expression(tokens)))
+            tokens.pop(0)  # Remove 'print'
+            if tokens[0][0] == 'LPAREN':
+                tokens.pop(0)  # Remove '('
+                expr = parse_expression(tokens)
+                if tokens[0][0] == 'RPAREN':
+                    tokens.pop(0)  # Remove ')'
+                    ast.append(Print(expr))
+                else:
+                    raise SyntaxError("Expected ')' after print statement")
+            else:
+                raise SyntaxError("Expected '(' after 'print'")
         elif token_type == 'IDENTIFIER' and len(tokens) > 1 and tokens[1][0] == 'ASSIGN':
             name = tokens.pop(0)[1]
             tokens.pop(0)  # Remove '='
             ast.append(Assign(name, parse_expression(tokens)))
         else:
             raise SyntaxError(f"Unexpected token: '{value}'")
-
     return ast
 
 def parse_expression(tokens):
